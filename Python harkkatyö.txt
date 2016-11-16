@@ -1,0 +1,102 @@
+# This Python file uses the following encoding: utf-8
+from nltk import FreqDist
+from nltk.stem.snowball import SnowballStemmer
+from urllib.request import urlopen
+import re
+import chardet
+import nltk
+
+# keskustelualue-urleja
+url16a = "http://keskustelu.suomi24.fi/t/10742973/ketaan-seuraksi-14-vuotiaalle-kauniille-tytolle-%29-"
+url16b = "http://keskustelu.suomi24.fi/t/1706313/paljonko-saatte-palkkaa-kesatoista"
+url16c = "http://keskustelu.suomi24.fi/t/6942001/miten-nuuskaa-kaytetaan"
+url16d = "http://keskustelu.suomi24.fi/t/9694239/mika-se-eeas-on"
+url16e = "http://keskustelu.suomi24.fi/t/1579493/mita-tarkoittaa-pissis"
+url16f = "http://keskustelu.suomi24.fi/t/13802939/onko-kettu-semmonen"
+url40a = "http://keskustelu.suomi24.fi/t/14053718/miniani-on-eronneen-naisen-tytar-ja-sen-huomaa!"
+url40b = "http://keskustelu.suomi24.fi/t/14094969/40+-naisen-ikakriisi"
+url40c = "http://keskustelu.suomi24.fi/t/11611493/quot-millainen-suomalainen-kulttuuri-on-quot"
+url70a = "http://keskustelu.suomi24.fi/t/14210811/jjoutavaa-harmittaa-kun-palstalla-vallitsee-tyhjys"
+url70b = "http://keskustelu.suomi24.fi/t/14213477/kadet-sen-kertovat"
+url70c = "http://keskustelu.suomi24.fi/t/14215290/kanto-kaskessa"
+
+# Haetaan aineisto
+def haeAineisto(url):
+    sisalto = url2page(url);
+    return sisalto
+
+# Avataan sivu
+def url2page(osoite):
+    return(urlopen(osoite).read())
+
+# merkistöt tarkitettu olevan utf-8
+def dekoodaa(s):
+    return (s.decode('utf-8'))
+
+# Tokenisoidaan, eli pilkotaan sanoiksi
+def tokenisoi(s):
+    siivottu = re.sub('<[^>]*>', ' ', s)
+    lista = siivottu.split()
+    wlista = [w for w in lista if w.isalpha()]
+    return wlista
+
+# Stemmataan lista
+def stemmaa(lista):
+    stemmilista = [SnowballStemmer("finnish").stem(w) for w in lista]
+    return stemmilista
+
+# stop-sanat
+def stopsanat():
+    stopSanatStringi = "aina alla ehkä eivät emme en enemmän ennen et että ette hän häneen hänellä hänelle häneltä hänen hänessä hänestä hänet häntä he heidän heidät heihin heillä heille heiltä heissä heistä heitä hlö hlöä oikein http hyvin ilman itse ja jälkeen johon joiden joihin joiksi joilla joille joilta joina joissa joista joita joka joka joksi jolla jolle jolta jona jonka jos jossa josta jota jotka kai kaikki kanssa kaukana keiden keihin keiksi keillä keille keiltä keinä keissä keistä keitä keneen keneksi kenellä kenelle keneltä kenen kenenä kenessä kenestä kenet kenties keskellä kesken ketä ketkä ketkä koska koskaan kuin kuinka kuka kun kyllä lähellä läpi liian lla luona me meidän meidät meihin meillä meille meiltä meissä meistä meitä mihin mikä miksi millä mille milloin milloinkaan miltä minä minkä minua minulla minulle minulta minun minussa minusta minut minuun missä mistä mitä miten mitkä mukaan mutta muut näiden näihin näiksi näillä näille näiltä näinä näissä näistä näitä nämä ne niiden niihin niiksi niillä niille niiltä niin niinä niissä niistä niitä noiden noihin noiksi noilla noille noilta noin noina noissa noista noita nopeasti nuo nyt oikea oikealla ole olemme olen olet olette oli olimme olin olisi olisimme olisin olisit olisitte olisivat olit olitte olivat olla olleet ollut on ovat paljon poikki puh saa saada se sekä sen siellä siihen siinä siitä siksi sillä sille siltä sinä sinua sinulla sinulle sinulta sinun sinussa sinusta sinut sinuun sitä ssa sta suoraan tähän tai takana takia täksi tällä tälle tältä tämä tämän tänä tässä tästä tätä te teidän teidät teihin teillä teille teiltä teissä teistä teitä tms tuo tuoda tuohon tuoksi tuolla tuolle tuolta tuon tuona tuossa tuosta tuota vaan vähän vähemmän vai vain vaikka vasen vasemmalla vastan vielä vieressä voi voida voit www yhdessä yli ylös yms com fax klo myös muuta viim asti sis koko alle joskus sivu paitsi sitten tule auki paras joko saat ei html kommentoi jaa ilmianna"
+    #unicodestop = dekoodaa(stopSanatStringi)
+    stopSanaLista = tokenisoi(stopSanatStringi)
+    stemmattuStopLista = stemmaa(stopSanaLista)
+    return stemmattuStopLista
+
+# Tehdään lista 16-vuotiaiden keskusteluista
+def lista16(stemmattuStopLista):
+    keskustelu = [url16a, url16b, url16c, url16d, url16e, url16f]
+    lista16 = []
+    for url in keskustelu:
+        teksti = haeAineisto(url)
+        unicodeTeksti = dekoodaa(teksti)
+        tekstiLista = tokenisoi(unicodeTeksti)
+        stemmiLista = stemmaa(tekstiLista)
+        poistettuLista = [sana for sana in stemmiLista if sana.lower not in stemmattuStopLista]
+        for sana in poistettuLista:
+            lista16.append(sana)
+    return lista16
+
+# Tehdään lista 40-vuotiaiden keskusteluista
+def lista40():
+    keskustelu = [url40a, url40b, url40c]
+    lista40 = []
+    for url in keskustelu:
+        teksti = haeAineisto(url)
+        unicodeTeksti = dekoodaa(teksti)
+        tekstiLista = tokenisoi(unicodeTeksti)
+        stemmiLista = stemmaa(tekstiLista)
+        poistettuLista = [sana for sana in stemmiLista if sana not in stopSanaLista]
+        for sana in poistettuLista:
+            lista40.append(sana)
+    return lista40
+
+# Tehdään lista 70-vuotiaiden keskusteluista
+def lista70():
+    keskustelu = [url70a, url70b, url70c]
+    lista70 = []
+    for url in keskustelu:
+        teksti = haeAineisto(url)
+        unicodeTeksti = dekoodaa(teksti)
+        tekstiLista = tokenisoi(unicodeTeksti)
+        stemmiLista = stemmaa(tekstiLista)
+        poistettuLista = [sana for sana in stemmiLista if sana not in stopSanaLista]
+        for sana in poistettuLista:
+            lista70.append(sana)
+    return lista70
+
+# Lasketaan frekvenssit listasta, palauttaa yleisimmät 50
+def laskeFrekvenssit(lista):
+    fdist = FreqDist(lista)
+    return fdist.most_common(50)
+	
