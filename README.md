@@ -8,4 +8,4 @@ All assignments and projects related to school/work pasted here as is.
   Python harkkatyö.txt (Tampere University - ITIS12 coursework)
   
 2018
-  Tira2017.java + hashnode.java (Tampere University - Data structures coursework)
+  Tira2017.java + HashNode.java (Tampere University - Data structures coursework)
