@@ -1,9 +1,7 @@
 # Work
 All assignments and projects related to school/work pasted here as is.
 
-2023 Working on: https://github.com/solita/dev-academy-2023-exercise 
-
-https://github.com/JuhoTorkkeli/Helsinki-City-Bike
+2024 Working on: 
 
 2018
   Tira2017.java + HashNode.java (Tampere University - Data structures coursework)
