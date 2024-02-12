@@ -1,0 +1,1373 @@
+% Title: ANALYZING SEQUENTIAL PATTERN MINING TO DETECT CALCIUM PEAKS IN CARDIOMYOCYTES DATA
+% Hakemistopolut syötetään ohjelmaan käsin
+% Hakemistoissa erillään kaksi eri mittausaineistoa (folder1, folder2)
+%--------------------------------------------------------------------------------
+% (1) Kohina eli pienet piikit (10% suuren piikin estimaatista) (pitää
+% ensin laskea mikä lasketaan piikiksi! (DONE)
+
+% Pitää katsoa miten lasketaan sekvenssi kirjaimen kanssa)
+% (katsotaan silmämääräisesti muita piikkejä) (DONE!)
+
+% (2) Keskiarvo signaaleista intervalleista (DONE!)
+% piikkien aikaväli, korkeus, (DONE)
+% vaihtelu signaalin sisällä (tarkoittaa varmaan piikin eroa
+% seuraavasta piikistä? (DONE)
+
+% (3) data1Dis ja data2Dis sarakkeeseen viereen ratio range (DONE!) (disValuesRatio &
+% disValuesTime)
+
+% (4) Katso kirjainpari jaottelua uudelleen (Voi muuttaa lisää tutkimusta
+% tehdessä) DONE! (aluksi 12 kirjainta) (nyt 14 kirjainta) -> aika 5
+% kirjainta 5x14
+
+% (5) Kuva gradutekstiin käppyrä + kirjainparit (Pitää varmistaa mitä
+% kirjainparijaottelua käyttää!) (DONE!)
+
+% (6) Uusi kuva uuden time mapping kanssa! (DONE!)
+% (7) pitää tod. sorttaa ratio range vielä uudestaan pienemmäksi!
+
+% Yksi piikki, alku, huippu, loppu = item? (riittää kun tunnistaa suurimman osan keski
+% /suurista piikeistä) (Done!)
+
+% Pyritään löytämään kaksi peräkkäistä piikkiä (sekvenssi itemset) per
+% signaali (tietyn kirjainparin sisällä) (wX â†’ yZ)
+
+% Katsotaan minkälaisia kattavia joukkoja assosisaatiosääntöjen
+% avulla voisi löytyä per signaali (Sequential pattern mining)
+
+%--------------------------------------------------------------------------------
+% MEMO
+% 1 = folder1
+% 2 = data1
+% 3 = data1Detrend, data1DetrendMinMaxRatio
+% 4 = data1DetrendRemoveNegative, data1DrnMaxRatio
+% 5 = ratioMinMax
+% 6 = data1Averages
+% 7 = data1Dis, data1DisNum
+% 8 = disValuesTime, disValuesRatio
+% 9 = data1SequenceRows (havainnollistamista varten)
+% 10 = data1MergeRows (Merge time and ratio columns = tehdään seuraava
+% vaihe)
+% 11 = data1ItemSets
+% 12 = data1ItemSetsSplit
+% 13 = data1AverageTopMinusBottom
+% 14 = data1CandidateItemSets
+% 15 = data1PeakMaxHeight = cell(1,numel(data1CandidateItemSets));
+%      data1PeakMaxHeightVariation = cell(1,numel(data1CandidateItemSets));
+% 16 = mappingTableRatio, mappingTableTime
+% 17 = data1CandidateItemSetsThreshold
+% 18 = data1CandidateItemSetsFinal
+]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 1
+% Otetaan talteen annetuista hakemistoista tiedostojen sijainnit
+% (folder1, folder2)
+
+% Hakemiston nimi
+folder1 = 'D:\Lataukset\Gradu\kuvaajat\Ca-kuvaajia 07801.HCMMc KPe 140414';
+folder2 = 'D:\Lataukset\Gradu\kuvaajat\Kuvaajia 140314 KPe';
+
+% Tiedostotyyppi: .xlsx
+filetype = '*.xlsx';
+
+% Hakemiston nimi + tiedostotyyppi
+directory1 = fullfile(folder1,filetype);
+directory2 = fullfile(folder2,filetype);
+
+% Listataan hakemiston kaikki .xlsx -tiedostot
+xlsxFiles1 = dir(directory1);
+xlsxFiles2 = dir(directory2);
+
+disp('Done!');
+clear directory1 directory2 filetype]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 2
+% Otetaan talteen molemmista hakemistoista löytyneistä excel-tiedostoista
+%tiedot ylös ;sarakkeet: time & ratio
+% (data1, data2)
+
+% Preallocate arrays
+data1 = cell(1,numel(xlsxFiles1));
+data1Raw = cell(1,numel(xlsxFiles1));
+data2 = cell(1,numel(xlsxFiles2));
+data2Raw = cell(1,numel(xlsxFiles2));
+
+% Niin kauan kuin .xlsx -tiedostoja löytyy ensimmäisestä hakemistosta
+for i = 1:numel(xlsxFiles1)
+    % Otetaan tiedoston data talteen
+    [data1{1,i},txt,data1Raw{1,i}] = xlsread(fullfile(folder1,xlsxFiles1(i).name));
+end
+
+% Niin kauan kuin .xlsx -tiedostoja löytyy toisesta hakemistosta
+for i = 1:numel(xlsxFiles2)
+    % Otetaan tiedoston data talteen
+    [data2{1,i},txt2,data2Raw{1,i}] = xlsread(fullfile(folder2,xlsxFiles2(i).name));
+end
+
+% Suljetaan excel-tiedostot
+%system('taskkill /F /IM EXCEL.EXE');
+fclose('all');
+
+disp('Done!');
+clear folder1 folder2 i xlsxFiles1 xlsxFiles2]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 3
+% Otetaan talteen: 
+% Pisin signaali (timeMax)
+% Detrendatut signaalit (data1Detrend, data2Detrend)
+% Detrend ratio arvojen minimit ja maksimit signaalikohtaisesti
+%(data1MinMaxRatio, data2MinMaxRatio)
+
+% Preallocate arrays
+data1Detrend = cell(1,numel(data1));
+data1DetrendMinMaxRatio = cell(1,numel(data1));
+data2Detrend = cell(1,numel(data2));
+data2DetrendMinMaxRatio = cell(1,numel(data2));
+
+timeMax = cell(1,3);
+timeMax{1,1} = 0;
+ratioMin = 0;
+ratioMax = 0;
+
+% Ensimmäinen hakemisto
+for i = 1:numel(data1)
+    
+    % Käydään lävitse yksi signaali kerrallaan, detrendataan ratio
+    tempData = data1{1,i};
+    tempTime = tempData(:,1);
+    ratioDetrend = detrend(tempData(:,2));
+    tempDataDetrend = [tempTime, ratioDetrend];
+    
+    % Otetaan talteen detrend ratio arvot
+    [data1Detrend{1,i}] = tempDataDetrend;
+    tempTimeMax = tempTime(end);
+    
+    % Otetaan talteen signaalikohtaisesti minimi ja maksimi ratio
+    tempRatioMin = min(ratioDetrend);
+    tempRatioMax = max(ratioDetrend);
+    tempRatioMinMax = [tempRatioMin, tempRatioMax];
+    [data1DetrendMinMaxRatio{1,i}] = tempRatioMinMax;
+    
+    % Päivitetään timeMax, jos seuraava signaali on pidempi
+    if timeMax{1,1} < tempTimeMax
+       timeMax{1,1} = tempTimeMax;
+       timeMax{1,2} = 'data1';
+       timeMax{1,3} = i;
+    end
+    
+    % Otetaan talteen minimi...
+    if ratioMin > tempRatioMin
+        ratioMin = tempRatioMin;
+        dmin = ['Ratio minimi on nyt: ', num2str(tempRatioMin)];
+        disp(dmin);
+    end
+    
+    % ...ja maksimi ratio arvot kaikista signaaleista
+    if ratioMax < tempRatioMax
+        ratioMax = tempRatioMax;
+        dmax = ['Ratio maksimi on nyt: ', num2str(tempRatioMax)];
+        disp(dmax);
+    end
+end
+
+% Toinen hakemisto
+for i = 1:numel(data2)
+    
+    % Käydään lävitse yksi signaali kerrallaan, detrendataan ratio
+    tempData = data2{1,i};
+    tempTime = tempData(:,1);
+    ratioDetrend = detrend(tempData(:,2));
+    tempDataDetrend = [tempTime, ratioDetrend];
+    [data2Detrend{1,i}] = tempDataDetrend;
+    tempTimeMax = tempTime(end);
+    
+    % Otetaan talteen signaalikohtaisesti minimi ja maksimi ratio
+    tempRatioMin = min(ratioDetrend);
+    tempRatioMax = max(ratioDetrend);
+    tempRatioMinMax = [tempRatioMin, tempRatioMax];
+    [data2DetrendMinMaxRatio{1,i}] = tempRatioMinMax;
+    
+    % Päivitetään timeMax, jos seuraava signaali on pidempi
+    if timeMax{1,1} < tempTimeMax
+       timeMax{1,1} = tempTimeMax;
+       timeMax{1,2} = 'data2' ;
+       timeMax{1,3} = i;
+    end
+    
+    % Otetaan talteen minimi...
+    if ratioMin > tempRatioMin
+        ratioMin = tempRatioMin;
+        dmin = ['Ratio minimi on nyt: ', num2str(tempRatioMin)];
+        disp(dmin);
+    end
+    
+    % ...ja maksimi ratio arvot kaikista signaaleista
+    if ratioMax < tempRatioMax
+        ratioMax = tempRatioMax;
+        dmax = ['Ratio maksimi on nyt: ', num2str(tempRatioMax)];
+        disp(dmax);
+    end
+end
+
+disp("Done!");
+clear tempData tempDataDetrend tempTime tempTimeMax tempRatioMin tempRatioMax tempRatioMinMax dmin dmax i ratioDetrend ratioMin ratioMax]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 4
+% Poistetaan signaalikohtaisesti negatiiviset numerot
+% nostetaan minimillä nollaan, ja otetaan talteen max ratio
+% (data1DetrendRemoveNegative, data2DetrendRemoveNegative)
+% (data1DrnMaxRatio, data2DrnMaxRatio)
+
+% Preallocate arrays
+data1DetrendRemoveNegative = cell(1, numel(data1Detrend));
+data2DetrendRemoveNegative = cell(1, numel(data2Detrend));
+data1DrnMaxRatio = cell(1, numel(data1Detrend));
+data2DrnMaxRatio= cell(1, numel(data2Detrend));
+
+% Ensimmäinen hakemisto
+for i = 1:numel(data1Detrend)
+    tempData = data1Detrend{1,i};
+    tempTime = tempData(:,1);
+    tempRatio = tempData(:,2);
+    tempMinMax = data1DetrendMinMaxRatio{1,i};
+    tempMin = tempMinMax(1,1);
+    
+    % Preallocate
+    tempData1RemoveNegative = zeros(numel(tempRatio),1);
+    
+    % Nostetaan kaikkia signaalin arvoja sen minimillä, jotta saadaan
+    % pienimmäksi arvoksi 0
+    for j = 1:numel(tempRatio)
+        tempData1RemoveNegative(j,1) = (tempRatio(j,1)-tempMin);
+    end
+    
+    tempRatioMax = max(tempData1RemoveNegative);
+    [data1DrnMaxRatio{1,i}] = tempRatioMax;
+    tempTimeRatio = [tempTime, tempData1RemoveNegative];
+    [data1DetrendRemoveNegative{1,i}] = tempTimeRatio;
+    clear tempTimeRatio
+end
+
+% Toinen hakemisto
+for i = 1:numel(data2Detrend)
+    tempData2 = data2Detrend{1,i};
+    tempTime2 = tempData2(:,1);
+    tempRatio2 = tempData2(:,2);
+    tempMinMax2 = data2DetrendMinMaxRatio{1,i};
+    tempMin2 = tempMinMax2(1,1);
+    
+    % Preallocate
+    tempData2RemoveNegative = zeros(numel(tempRatio2),1);
+    
+    % Nostetaan kaikkia signaalin arvoja sen minimillä, jotta saadaan
+    % pienimmäksi arvoksi 0
+    for j = 1:numel(tempRatio2)
+        tempData2RemoveNegative(j,1) = (tempRatio2(j,1)-tempMin2);
+    end
+    
+    tempRatio2Max = max(tempData2RemoveNegative);
+    [data2DrnMaxRatio{1,i}] = tempRatio2Max;
+    tempTimeRatio2 = [tempTime2, tempData2RemoveNegative];
+    [data2DetrendRemoveNegative{1,i}] = tempTimeRatio2;
+    clear tempTimeRatio2
+end
+
+disp("Done!");
+clear i j tempData tempData2 tempMin tempMin2 tempMinMax tempMinMax2 tempRatio tempRatio2 tempTime tempTime2 tempRatioMax tempRatio2Max tempData1RemoveNegative tempData2RemoveNegative]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 5
+% Otetaan talteen uusi min/max ratio arvo
+% (ratioMinMax)
+ratioMinRemoveNegative = data1DrnMaxRatio{1,1};
+ratioMaxRemoveNegative = data1DrnMaxRatio{1,1};
+tempMin = 0;
+tempMax = 0;
+minFolder = 1;
+maxFolder = 1;
+
+for i = 1:numel(data1DrnMaxRatio)
+    tempRatio = data1DrnMaxRatio{1,i};
+    if ratioMaxRemoveNegative < tempRatio
+        ratioMaxRemoveNegative = tempRatio;
+        tempMax = i;
+    elseif ratioMinRemoveNegative > tempRatio
+        ratioMinRemoveNegative = tempRatio
+        tempMin = i;
+    end
+end
+
+for i = 1:numel(data2DrnMaxRatio)
+    tempRatio = data2DrnMaxRatio{1,i};
+    if ratioMaxRemoveNegative < tempRatio
+        ratioMaxRemoveNegative = tempRatio;
+        tempMax = i;
+        maxFolder = 2;
+    elseif ratioMinRemoveNegative > tempRatio
+        ratioMinRemoveNegative = tempRatio
+        tempMin = i;
+        minFolder = 2;
+    end
+end
+ratioMinMax = [ratioMinRemoveNegative, ratioMaxRemoveNegative];
+ratioMinMaxSignals = [minFolder, tempMin, maxFolder, tempMax]
+
+dmin = ['Ratio minimi on nyt: ', num2str(ratioMinRemoveNegative)];
+dmax = ['Ratio maksimi on nyt: ', num2str(ratioMaxRemoveNegative)];
+disp(dmin);
+disp(dmax);
+disp("Done!");
+clear tempRatio i ratioMinRemoveNegative ratioMaxRemoveNegative dmin dmax tempMin tempMax minFolder maxFolder]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 6
+% Lasketaan (sort) signaalikohtaisesti pienimmistä ja suurimmista arvoista
+% keskiarvot (10%) ylä- ja alapäästä
+% (data1Averages, data2Averages)
+
+% Preallocate
+data1Averages = cell(1, numel(data1DetrendRemoveNegative));
+data2Averages = cell(1, numel(data2DetrendRemoveNegative));
+
+% Käydään läpi ensimmäinen hakemisto
+for i = 1:numel(data1DetrendRemoveNegative)
+    tempData = data1DetrendRemoveNegative{1,i};
+    tempRatio = tempData(:,2);
+    
+    % Järjestellään arvot suuruusjärjestykseen
+    % 0 pois?
+    sortRatio = sort(tempRatio);
+    sortRatioFlipped = flip(sortRatio);
+    sortRatioLow = sortRatio(1:length(sortRatio)/10);
+    sortRatioHigh = sortRatioFlipped(1:length(sortRatio)/10);
+    
+    % Summataan ne yhteen ja jaetaan itsellään
+    sumRatioLow = sum(sortRatioLow)/length(sortRatioLow);
+    sumRatioHigh = sum(sortRatioHigh)/length(sortRatioHigh);
+    sumRatioLowHigh = [sumRatioLow, sumRatioHigh];
+    
+    % Otetaan talteen ylin/alin 10% arvoista signaalikohtaisesti
+    [data1Averages{1,i}] = sumRatioLowHigh;
+end
+
+% Käydään läpi Toinen hakemisto
+for i = 1:numel(data2DetrendRemoveNegative)
+    tempData = data2DetrendRemoveNegative{1,i};
+    tempRatio = tempData(:,2);
+    
+    % Järjestellään arvot suuruusjärjestykseen
+    % 0 pois?
+    sortRatio = sort(tempRatio);
+    sortRatioFlipped = flip(sortRatio);
+    sortRatioLow = sortRatio(1:length(sortRatio)/10);
+    sortRatioHigh = sortRatioFlipped(1:length(sortRatio)/10);
+    
+    % Summataan ne yhteen ja jaetaan itsellään
+    sumRatioLow = sum(sortRatioLow)/length(sortRatioLow);
+    sumRatioHigh = sum(sortRatioHigh)/length(sortRatioHigh);
+    sumRatioLowHigh = [sumRatioLow, sumRatioHigh];
+    
+    % Otetaan talteen ylin/alin 10% arvoista signaalikohtaisesti
+    [data2Averages{1,i}] = sumRatioLowHigh;
+end
+
+disp('Done');
+clear i tempData tempRatio sortRatio sortRatioFlipped sortRatioLow sortRatioHigh sumRatioLow sumRatioHigh sumRatioLowHigh]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 7
+% Diskretisoidaan signaalit vakioarvon mukaan kirjainpareiksi
+% (data1Dis, data2Dis, data1DisNum, data2DisNum)
+% kirjainparien lukumäärä = satunnainen?
+
+% Kirjainparien lukumäärä
+letterNum = 14;
+
+% Kirjaimet(pienet ja isot)
+alphabetSmall = 'abcdefghijklmnopqrstuvwxyz';
+alphabetBig = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+% Diskretisoidaan aika sekunnin välein
+% timeVarToSec = ceil(timeMax{1,1}+1);
+
+% Preallocate arrays
+% Kommenteissa diskretisoidaan aika kirjainparien lukumäärän mukaan
+timeVariables = cell(letterNum,1);
+% timeVariables = cell(timeVarToSec,1);
+ratioVariables = cell(letterNum,1);
+data1Dis = cell(1,numel(data1DetrendRemoveNegative));
+data2Dis = cell(1,numel(data2DetrendRemoveNegative));
+data1DisNum = cell(1,numel(data1DetrendRemoveNegative));
+data2DisNum = cell(1,numel(data2DetrendRemoveNegative));
+
+% Aakkoset
+% letterSmall= {alphabetSmall(1:timeVarToSec)}.';
+% Kommenteissa diskretisoidaan aika kirjainparien lukumäärän mukaan
+letterSmall= {alphabetSmall(1:letterNum)}.';
+letterBig = {alphabetBig(1:letterNum)}.';
+
+% Luodaan timeVariables pienille kirjaimille = aika
+for i = 1:strlength(letterSmall)
+    [timeVariables{i,1}] = letterSmall{1:1}(i);
+end
+
+% Luodaan ratioVariables isoille kirjaimille = ratio
+for i = 1:strlength(letterBig)
+    [ratioVariables{i,1}] = letterBig{1:1}(i);
+end
+
+% Vakio muuttuja arvot kaikista signaaleista = timeConstant & ratioConstant
+% Määritellään diskretisoitu aika pisimmän signaalin mukaan molemmista
+% hakemistoista jaettuna aikamuuttujien lukumäärällä (tai sekuntti?)
+% Määritellään diskretisoitu ratio korkeimman arvon mukaan löytyneestä
+% signaalista, molemmista hakemistoista
+
+% Kommenteissa diskretisoidaan aika kirjainparien lukumäärän mukaan
+timeConstant = timeMax{1,1}/(numel(timeVariables)-1);
+
+% timeConstant = timeVarToSec/(numel(timeVariables));
+disTime = (0:timeConstant:ceil(timeMax{1,1})).';
+ratioConstant = ratioMinMax(1,end)/(numel(ratioVariables)-1);
+disRatio = (0:ratioConstant:ratioMinMax(1,end)).';
+
+% Diskretisoidaan ensimmäinen hakemisto
+for i = 1:numel(data1DetrendRemoveNegative)
+    tempData = data1DetrendRemoveNegative{1,i};
+    tempTime = tempData(:,1);
+    tempRatio = tempData(:,2);
+    ttime = disTime(discretize(tempTime,disTime));
+    catTime = categorical(ttime,disTime,timeVariables);
+    catTimeNum = categorical(ttime,disTime);
+    ratio = disRatio(discretize(tempRatio,disRatio));
+    catRatio = categorical(ratio,disRatio,ratioVariables);
+    catRatioNum = categorical(ratio,disRatio);
+    catSignal = [catTime,catRatio];
+    catSignalNum = [catTimeNum, catRatioNum];
+    [data1Dis{1,i}] = catSignal;
+    [data1DisNum{1,i}] = catSignalNum;
+end
+
+% Diskretisoidaan toinen hakemisto
+for i = 1:numel(data2DetrendRemoveNegative)
+    tempData = data2DetrendRemoveNegative{1,i};
+    tempTime = tempData(:,1);
+    tempRatio = tempData(:,2);
+    ttime = disTime(discretize(tempTime,disTime));
+    catTime = categorical(ttime,disTime,timeVariables);
+    catTimeNum = categorical(ttime,disTime);
+    ratio = disRatio(discretize(tempRatio,disRatio));
+    catRatio = categorical(ratio,disRatio,ratioVariables);
+    catRatioNum = categorical(ratio,disRatio);
+    catSignal = [catTime,catRatio];
+    catSignalNum = [catTimeNum, catRatioNum];
+    [data2Dis{1,i}] = catSignal;
+    [data2DisNum{1,i}] = catSignalNum;
+end
+
+disp('Done!');
+clear i catTime catTimeNum catRatio catRatioNum catSignal catSignalNum ratio ttime tempData tempRatio tempRatio2 tempTime tempTime2 alphabetBig alphabetSmall letterNum letterBig letterSmall]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 8
+% Luodaan uusi joukko disTime + timeVariables = disValuesTime
+% disRatio + ratioVariables = disValuesRatio
+% (disValuesTime, disValuesRatio)
+% (disValuesTimeRaw, disValuesRatioRaw)
+
+% Preallocate arrays
+disValuesTime = cell(2,numel(disTime)).';
+disValuesRatio = cell(2,numel(disRatio)).';
+disValuesTimeRaw = cell(3,numel(disTime)).';
+disValuesRatioRaw = cell(3,numel(disRatio)).';
+
+i = 1;
+
+% Yhdistetään aika arvot joukoksi pienien aakkosien kanssa
+[disValuesTime{i,1}] = "Time < " + disTime(i+1,1);
+[disValuesTime{i,2}] = timeVariables(i,1);
+[disValuesTimeRaw{i,1}] = disTime(i,1);
+[disValuesTimeRaw{i,2}] = disTime(i+1,1);
+[disValuesTimeRaw{i,3}] = timeVariables(i,1);
+
+for i = 2:numel(disTime)-1
+    [disValuesTime{i,1}] = disTime(i,1) + " â‰¤ Time < " + disTime(i+1,1);
+    [disValuesTime{i,2}] = timeVariables(i,1);
+    [disValuesTimeRaw{i,1}] = disTime(i,1);
+    [disValuesTimeRaw{i,2}] = disTime(i+1,1);
+    [disValuesTimeRaw{i,3}] = timeVariables(i,1);
+end
+
+[disValuesTime{i+1,1}] = "Time â‰¥ " + disTime(i+1);
+[disValuesTime{i+1,2}] = timeVariables(i+1,1);
+[disValuesTimeRaw{i+1,1}] = disTime(i+1);
+[disValuesTimeRaw{i+1,2}] = disTime(i+1);
+[disValuesTimeRaw{i+1,3}] = timeVariables(i+1,1);
+
+i = 1;
+
+% Yhdistetään ratio arvot joukoksi isojen aakkosien kanssa
+[disValuesRatio{i,1}] = "Ratio < " + disRatio(i+1,1);
+[disValuesRatio{i,2}] = ratioVariables(i,1);
+[disValuesRatioRaw{i,1}] = disRatio(i,1);
+[disValuesRatioRaw{i,2}] = disRatio(i+1,1);
+[disValuesRatioRaw{i,3}] = ratioVariables(i,1);
+
+for i = 2:numel(disRatio)-1
+    [disValuesRatio{i,1}] = disRatio(i,1) + " â‰¤ Ratio < " + disRatio(i+1,1);
+    [disValuesRatio{i,2}] = ratioVariables(i,1);
+    [disValuesRatioRaw{i,1}] = disRatio(i,1);
+    [disValuesRatioRaw{i,2}] = disRatio(i+1,1);
+    [disValuesRatioRaw{i,3}] = ratioVariables(i,1);
+end
+
+[disValuesRatio{i+1,1}] = "Ratio â‰¥ " + disRatio(i+1);
+[disValuesRatio{i+1,2}] = ratioVariables(i+1,1);
+[disValuesRatioRaw{i+1,1}] = disRatio(i+1);
+[disValuesRatioRaw{i+1,2}] = disRatio(i+1);
+[disValuesRatioRaw{i+1,3}] = ratioVariables(i+1,1);
+
+disp("done!");
+clear i]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 9
+% Havainnollistetaan miltä sekvenssit näyttävät
+data1SequenceRows = cell(1,numel(data1Dis));
+data2SequenceRows = cell(1,numel(data2Dis));
+data1SequenceRowsRaw = cell(1,numel(data1Dis));
+data2SequenceRowsRaw = cell(1,numel(data2Dis));
+
+% Luetaan ensimmäinen hakemisto
+for i = 1:numel(data1Dis)
+    tempData = data1Dis(1,i);
+    tempTime = tempData{1,1}(:,1);
+    tempRatio = tempData{1,1}(:,2);
+    tempData2 = [tempTime, tempRatio];
+    sequenceRow = "<({";
+    sequenceRowRaw = "";
+    j = 1;
+    
+    while j < length(tempData2)
+        tempRow = string(tempData2(j,:));
+        tempRow = strcat(tempRow(1,1),tempRow(1,2));
+        sequenceRow = strcat(sequenceRow, tempRow, "},", "{");
+        sequenceRowRaw = strcat(sequenceRowRaw, tempRow);
+        j = j+1;
+    end
+    tempRow = string(tempData2(j,:));
+    tempRow = strcat(tempRow(1,1),tempRow(1,2));
+    sequenceRow = strcat(sequenceRow, tempRow, "})>");
+    sequenceRowRaw = strcat(sequenceRowRaw, tempRow);
+    data1SequenceRows{1,i} = sequenceRow;
+    data1SequenceRowsRaw{1,i} = sequenceRowRaw;
+end
+
+% Luetaan toinen hakemisto
+for i = 1:numel(data2Dis)
+    tempData = data2Dis(1,i);
+    tempTime = tempData{1,1}(:,1);
+    tempRatio = tempData{1,1}(:,2);
+    tempData2 = [tempTime, tempRatio];
+    sequenceRow = "<({";
+    sequenceRowRaw = "";
+    j = 1;
+    
+    while j < length(tempData2)
+        tempRow = string(tempData2(j,:));
+        tempRow = strcat(tempRow(1,1),tempRow(1,2));
+        sequenceRow = strcat(sequenceRow, tempRow, "},", "{");
+        sequenceRowRaw = strcat(sequenceRowRaw, tempRow);
+        j = j+1;
+    end
+    tempRow = string(tempData2(j,:));
+    tempRow = strcat(tempRow(1,1),tempRow(1,2));
+    sequenceRow = strcat(sequenceRow, tempRow, "})>");
+    sequenceRowRaw = strcat(sequenceRowRaw, tempRow);
+    data2SequenceRows{1,i} = sequenceRow;
+    data2SequenceRowsRaw{1,i} = sequenceRowRaw;
+end
+
+disp("Done!");
+clear tempData tempTime tempRatio tempData2 i j sequenceRow  sequenceRowRaw tempRow tempRow2]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 10
+% Merge time and ratio columns
+data1MergeRows = cell(1,numel(data1Dis));
+data2MergeRows = cell(1,numel(data2Dis));
+
+% Ensimmäinen hakemisto
+for i = 1:numel(data1Dis)
+    tempData = string(data1Dis{1,i});
+    tempData2 = string(length(tempData));
+    j = 1;
+    while j < length(tempData)
+    tempData2(j,1) = strcat(tempData(j,1),tempData(j,2));
+    j = j+1;
+    end
+    tempData2(j,1) = strcat(tempData(j,1), tempData(j,2));
+    [data1MergeRows{1,i}] = tempData2;
+end
+
+% Toinen hakemisto
+for i = 1:numel(data2Dis)
+    tempData = string(data2Dis{1,i});
+    tempData2 = string(length(tempData));
+    j = 1;
+    while j < length(tempData)
+    tempData2(j,1) = strcat(tempData(j,1),tempData(j,2));
+    j = j+1;
+    end
+    tempData2(j,1) = strcat(tempData(j,1), tempData(j,2));
+    [data2MergeRows{1,i}] = tempData2;
+end
+disp("Done!")
+clear i j tempData tempData2]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 11
+% Lasketaan jokaisen tiedoston ilmenevät itemsetit järjestyksessä ja
+% otetaan talteen itemsetit ja niiden peräkkäinen lukumäärä (a,A) =
+% 37, (a,B) = 2, (a,A) = 13, jne.
+% data1ItemSets & data2ItemSets
+
+% Preallocate arrays
+data1ItemSets = cell(1,numel(data1MergeRows));
+data2ItemSets = cell(1,numel(data2MergeRows));
+
+counter = 1;
+j = 1;
+k = 1;
+
+% Otetaan ylös jokaisesta diskretisoidusta signaalista itemsetit alusta loppuun...
+% Ja tehdään sama seuraavalle hakemiston singaaleille...
+for i = 1:numel(data1MergeRows)
+    tempData = data1MergeRows{1,i};
+    while j < length(tempData)
+        uniqueRow = tempData(j,:);
+        while uniqueRow == tempData(j+1,:)
+            counter = counter+1;
+            j = j+1;
+            if j == length(tempData)
+                break
+            end
+        end
+        
+        % ...aika(a), ratio(A), ja peräkkäinen lukumäärä (37), jne.
+        [data1ItemSets{1,i}(k,1)] = categorical(uniqueRow(1,1));
+        [data1ItemSets{1,i}(k,2)] = categorical(counter);
+        counter = 1;
+        k = k+1;
+        j = j+1;
+    end
+    % Tarkistetaan jos viimeinen rivi on eri kuin toiseksi viimeinen,
+    % otetaan talteen
+    if uniqueRow ~= tempData(end,:)
+        [data1ItemSets{1,i}(k,1)] = categorical(tempData(end,:));
+        [data1ItemSets{1,i}(k,2)] = categorical(counter);
+    end
+    disp(sum(double(string(data1ItemSets{1,i}(:,end)))));
+    j = 1;
+    k = 1;
+end
+
+% Ja tehdään sama seuraavalle hakemiston singaaleille...
+for i = 1:numel(data2MergeRows)
+    tempData = data2MergeRows{1,i};
+    while j < length(tempData)
+        uniqueRow = tempData(j,:);
+        while uniqueRow == tempData(j+1,:)
+            counter = counter+1;
+            j = j+1;
+            if j == length(tempData)
+                break
+            end
+        end
+        
+        % ...aika(a), ratio(A), peräkkäinen lukumäärä (37), jne.
+        [data2ItemSets{1,i}(k,1)] = categorical(uniqueRow(1,1));
+        [data2ItemSets{1,i}(k,2)] = categorical(counter);
+        counter = 1;
+        k = k+1;
+        j = j+1;
+    end
+    % Tarkistetaan jos viimeinen rivi on eri kuin toiseksi viimeinen,
+    % otetaan talteen
+    if uniqueRow ~= tempData(end,:)
+        [data2ItemSets{1,i}(k,1)] = categorical(tempData(end,:));
+        [data2ItemSets{1,i}(k,2)] = categorical(counter);
+    end
+    disp(sum(double(string(data2ItemSets{1,i}(:,end)))));
+    j = 1;
+    k = 1;
+end
+
+disp("Done!");
+clear i j k counter uniqueRow tempData]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 12
+% Erotetaan kirjainparit seuraavia operaatioita varten etukäteen ja otetaan talteen
+data1ItemSetSplit = cell(1,numel(data1ItemSets));
+data2ItemSetSplit = cell(1,numel(data2ItemSets));
+
+for i = 1:numel(data1ItemSets)
+    tempData = cellstr(data1ItemSets{1,i});
+    tempFirstColumn = tempData(:,1);
+    tempSecondColumn = tempData(:,2);
+    for j = 1:length(tempData)
+        firstLetter = tempFirstColumn{j}(1);
+        secondLetter = tempFirstColumn{j}(2);
+        [data1ItemSetSplit{1,i}(j,1)] = categorical(cellstr(firstLetter));
+        [data1ItemSetSplit{1,i}(j,2)] = categorical(cellstr(secondLetter));
+        [data1ItemSetSplit{1,i}(j,3)] = tempSecondColumn{j,1};
+    end
+end
+
+for i = 1:numel(data2ItemSets)
+    tempData = cellstr(data2ItemSets{1,i});
+    tempFirstColumn = tempData(:,1);
+    tempSecondColumn = tempData(:,2);
+    for j = 1:length(tempData)
+        firstLetter = tempFirstColumn{j}(1);
+        secondLetter = tempFirstColumn{j}(2);
+        [data2ItemSetSplit{1,i}(j,1)] = categorical(cellstr(firstLetter));
+        [data2ItemSetSplit{1,i}(j,2)] = categorical(cellstr(secondLetter));
+        [data2ItemSetSplit{1,i}(j,3)] = tempSecondColumn{j,1};
+    end
+end
+disp("Done!")
+clear tempData tempFirstColumn tempSecondColumn i j firstLetter secondLetter]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 13
+% Lasketaan keskiarvo ylimmistä arvoista minus alimmaiset arvot = average (keskiarvo)
+data1AverageTopMinusBottom = cell(1,numel(data1Averages));
+data2AverageTopMinusBottom = cell(1,numel(data2Averages));
+
+tempData = disValuesRatioRaw;
+
+% Ensimmäinen hakemisto
+for i = 1:numel(data1Averages)
+    value = (data1Averages{1,i}(1,2)-data1Averages{1,i}(1,1));
+    idx = find(value >= [tempData{:, 1}] & value <= [tempData{:, 2}]);
+    peak_max_t = [tempData{idx, 3}];
+    [data1AverageTopMinusBottom{1,i}(1,1)] = peak_max_t;
+end
+
+% Toinen hakemisto
+for i = 1:numel(data2Averages)
+    value = (data2Averages{1,i}(1,2)-data2Averages{1,i}(1,1));
+    idx = find(value >= [tempData{:, 1}] & value <= [tempData{:, 2}]);
+    peak_max_t = [tempData{idx, 3}];
+    [data2AverageTopMinusBottom{1,i}(1,1)] = peak_max_t;
+end
+disp("Done!");
+clear tempData value i idx peak_max_t]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 14
+% Piikki = start -> maxima -> end = itemsets
+% Katsotaan minkälaisia sekvenssejä löytyy datasta
+% Pieni kirjain = time, suuri kirjain = ratio
+% [a,A] = item
+% ([a,A], [a,B], [a,A]) = itemset (yksi piikki)
+% [a,A], [a,B], [a,A], [j,A]...  = sequence (koko signaali)
+
+data1CandidateItemSets = cell(1,numel(data1ItemSetSplit));
+data2CandidateItemSets = cell(1,numel(data2ItemSetSplit));
+
+% Ensimmäinen hakemisto
+for j = 1:numel(data1ItemSetSplit)
+    tempData = data1ItemSetSplit{1,j};
+    tempTime = categorical(tempData(:,1), timeVariables, "Ordinal", true);
+    tempRatio = categorical(tempData(:,2), ratioVariables, "Ordinal", true);
+    n = length(tempRatio);
+    array = tempRatio;
+    k = 1;
+    
+    peakStart = '';
+    peakMax = '';
+%     peakEnd = '';
+    peakStartC = 0;
+    peakMaxC = 0;
+    peakEndC = 0;
+    peaksTotal = 0;
+    
+    
+    for i = 1:n
+        % Check if the current element is a peak start
+        if (i < n && array(i+1) > array(i) && isempty(peakStart)) || (i < n && i > 1 &&  isempty(peakStart) && array(i-1) < array(i))
+            peakStart = char(array(i));
+            peakStart_c = i;
+            peakStart_ratio = tempRatio(i);
+            peakStart_time = tempTime(i);
+            if i > 1 && array(i-1) < array(i)
+                peakStart = char(array(i-1));
+                peakStart_c = i-1;
+                peakStart_ratio = tempRatio(i-1);
+                peakStart_time = tempTime(i-1);
+            end
+        end
+        
+        % Check if the current element is a peak max
+        if i > 1 && i < n && array(i+1) < array(i) && array(i-1) <= array(i) && isempty(peakMax) && ~isempty(peakStart)
+            peakMax = char(array(i));
+            peakMaxC = i;
+            peakMaxRatio = tempRatio(i);
+            peakMaxTime = tempTime(i);
+        end
+        
+        % Check if the current element is a peak end
+        if (i > 2 && i < n && array(i-1) >= array(i) && array(i+1) > array(i) && ~isempty(peakMax)) || (i == n-1 && array(i-1) >= array(i) && array(i+1) >= array(i) && ~isempty(peakMax)) || (i == n && array(i-1) >= array(i) && ~isempty(peakMax))
+%             peakEnd = char(array(i));
+            peakEndC = i;
+            peakEndRatio = tempRatio(i);
+            peakEndTime = tempTime(i);
+            m = 1;
+            while array(i-m) <= array(i)
+                peakEndC = i-m;
+                peakEndRatio = tempRatio(i-m);
+                peakEndTime = tempTime(i-m);
+                m = m+1;
+            end
+            if i == n-1 && array(i+1) < array(i)
+%                 peakEnd = char(array(i+1));
+                peakEndC = i+1;
+                peakEndRatio = tempRatio(i+1);
+                peakEndTime = tempTime(i+1);
+            end
+            
+            peakStartTimeRatio = categorical(strcat(string(peakStartRatio), string(peakStartRatio)));
+            peakMaxTimeRatio = categorical(strcat(string(peakMaxTime), string(peakMaxRatio)));
+            peakEndTimeRatio = categorical(strcat(string(peakEndTime), string(peakEndRatio)));
+            [data1CandidateItemSets{1,j}(k,1)] = categorical(peakStartTimeRatio);
+            [data1CandidateItemSets{1,j}(k,2)] = categorical(peakMaxTimeRatio);
+            [data1CandidateItemSets{1,j}(k,3)] = categorical(peakEndTimeRatio);
+            [data1CandidateItemSets{1,j}(k,4)] = categorical(peakStartC);
+            [data1CandidateItemSets{1,j}(k,5)] = categorical(peakMaxC);
+            [data1CandidateItemSets{1,j}(k,6)] = categorical(peakEndC);
+            
+            peaksTotal = peaksTotal + 1;
+            % Reset variables for the next peak
+            peakStart = '';
+            peakMax = '';
+%             peakEnd = '';
+            k = k+1;
+        end
+    end
+    disp(peaksTotal);
+end
+
+% Toinen hakemisto
+for j = 1:numel(data2ItemSetSplit)
+    tempData = data2ItemSetSplit{1,j};
+    tempTime = categorical(tempData(:,1), timeVariables, "Ordinal", true);
+    tempRatio = categorical(tempData(:,2), ratioVariables, "Ordinal", true);
+    n = length(tempRatio);
+    array = tempRatio;
+    k = 1;
+    
+    % Initialize variables
+    peakStart = '';
+    peakMax = '';
+%     peakEnd = '';
+    peakStartC = 0;
+    peakMaxC = 0;
+    peakEndC = 0;
+    peaksTotal = 0;
+    
+    for i = 1:n
+        % Katsotaan ollaanko piikin alussa (peakStart)
+        if (i < n && array(i+1) > array(i) && isempty(peakStart)) || (i < n && i > 1 &&  isempty(peakStart) && array(i-1) < array(i))
+            peakStart = char(array(i));
+            peakStartC = i;
+            peakStartRatio = tempRatio(i);
+            peakStartRatio = tempTime(i);
+            if i > 1 && array(i-1) < array(i)
+                peakStart = char(array(i-1));
+                peakStartC = i-1;
+                peakStartRatio = tempRatio(i-1);
+                peakStartRatio = tempTime(i-1);
+            end
+        end
+        
+        % Katsotaan löytyikö piikin maksimi
+        if i > 1 && i < n && array(i+1) < array(i) && array(i-1) <= array(i) && isempty(peakMax) && ~isempty(peakStart)
+            peakMax = char(array(i));
+            peakMaxC = i;
+            peakMaxRatio = tempRatio(i);
+            peakMaxTime = tempTime(i);
+        end
+        
+        % Katsotaan löytyikö piikin loppu
+        if (i > 2 && i < n && array(i-1) >= array(i) && array(i+1) > array(i) && ~isempty(peakMax)) || (i == n-1 && array(i-1) >= array(i) && array(i+1) >= array(i) && ~isempty(peakMax)) || (i == n && array(i-1) >= array(i) && ~isempty(peakMax))
+%             peakEnd = char(array(i));
+            peakEndC = i;
+            peakEndRatio = tempRatio(i);
+            peakEndTime = tempTime(i);
+            m = 1;
+            while array(i-m) <= array(i)
+                peakEndC = i-m;
+                peakEndRatio = tempRatio(i-m);
+                peakEndTime = tempTime(i-m);
+                m = m+1;
+            end
+            
+            if i == n-1 && array(i+1) < array(i)
+%                 peakEnd = char(array(i+1));
+                peakEndC = i+1;
+                peakEndRatio = tempRatio(i+1);
+                peakEndTime = tempTime(i+1);
+            end
+            
+            peakStartTimeRatio = categorical(strcat(string(peakStartRatio), string(peakStartRatio)));
+            peakMaxTimeRatio = categorical(strcat(string(peakMaxTime), string(peakMaxRatio)));
+            peakEndTimeRatio = categorical(strcat(string(peakEndTime), string(peakEndRatio)));
+            [data2CandidateItemSets{1,j}(k,1)] = categorical(peakStartTimeRatio);
+            [data2CandidateItemSets{1,j}(k,2)] = categorical(peakMaxTimeRatio);
+            [data2CandidateItemSets{1,j}(k,3)] = categorical(peakEndTimeRatio);
+            [data2CandidateItemSets{1,j}(k,4)] = categorical(peakStartC);
+            [data2CandidateItemSets{1,j}(k,5)] = categorical(peakMaxC);
+            [data2CandidateItemSets{1,j}(k,6)] = categorical(peakEndC);
+            
+			% Piikkien lukumäärä talteen
+            peaksTotal = peaksTotal + 1;
+            % Lähdetään etsimään seuraavaa piikkiä (reset)
+            peakStart = '';
+            peakMax = '';
+%             peakEnd = '';
+            k = k+1;
+        end
+    end
+    disp(peaksTotal);
+end
+
+disp("Done!");
+clear array m i j k n peakEnd peakEndC peakEndRatio peakEndTime peakEndTimeRatio peakMax peakMaxC peakMaxRatio peakMaxTime peakMaxTimeRatio peakStart peakStartC peakStartRatio peakStartRatio peakStartTimeRatio peaksTotal tempData tempRatio tempTime]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 15
+% Keskiarvo signaaleista intervalleista (Tämänhetkinen piikin maksimi (minus) edellinen
+% maksimi, jos signaalin alusta data1ItemSets{1,i}(1,1))
+
+% Lasketaan maksimit yhteen / lukumäärällä = keskiarvo (ei tehty!)
+
+% Piikkien aikaväli (piikin alusta seuraavan piikin alkuun)
+% Lasketaan varmuuden vuoksi myös keskiarvot (Tehty myöhemmin!)
+
+% Lasketaan piikkien maksimien korkeudet (Done!)
+
+% Vaihtelu signaalin sisällä (Paljonko piikin alusta seuraavan alkuun on
+% vaihtelua = variation) (Ei tehty!)
+
+data1PeakMaxHeight = cell(1,numel(data1CandidateItemSets));
+data2PeakMaxHeight = cell(1,numel(data2CandidateItemSets));
+
+data1PeakMaxHeightVariation = cell(1,numel(data1CandidateItemSets));
+data2PeakMaxHeightVariation = cell(1,numel(data2CandidateItemSets));
+
+% Ensimmäinen hakemisto
+for i = 1:numel(data1CandidateItemSets)
+
+    tempData = cellstr(data1CandidateItemSets{1,i});
+    peakStart = tempData(:,1);
+    peakMax = tempData(:,2);
+    peakEnd = tempData(:,3);
+    peakMaxHeight = cellfun(@(x) x(2), peakMax);
+    peakMaxHeightNum = cellfun(@(x) x(2) - 'A', peakMax);
+%     signalStart = data1ItemSets{1,i}(1,1);
+%     signalStartHeight = cellfun(@(x) x(2), cellstr(signalStart));
+%     peakMaxHeight = [signalStartHeight; peakMaxHeight];
+    peakMaxInterval = diff(peakMaxHeight);
+    peakMaxHeight = cellstr(peakMaxHeight);
+    peakMaxHeightNum = num2cell(peakMaxHeightNum);
+    
+    [data1PeakMaxHeight{1,i}] = [peakMaxHeight, peakMaxHeightNum];
+    [data1PeakMaxHeightVariation{1,i}] = peakMaxInterval;
+    
+end
+
+disp("Done!");
+
+% Toinen hakemisto
+for i = 1:numel(data2CandidateItemSets)
+
+    tempData = cellstr(data2CandidateItemSets{1,i});
+    peakStart = tempData(:,1);
+    peakMax = tempData(:,2);
+    peakEnd = tempData(:,3);
+    peakMaxHeight = cellfun(@(x) x(2), peakMax);
+    peakMaxHeightNum = cellfun(@(x) x(2) - 'A', peakMax);
+%     signalStart = data1ItemSets{1,i}(1,1);
+%     signalStartHeight = cellfun(@(x) x(2), cellstr(signalStart));
+%     peakMaxHeight = [signalStartHeight; peakMaxHeight];
+    peakMaxInterval = diff(peakMaxHeight);
+    peakMaxHeight = cellstr(peakMaxHeight);
+    peakMaxHeightNum = num2cell(peakMaxHeightNum);
+    
+    [data2PeakMaxHeight{1,i}] = [peakMaxHeight, peakMaxHeightNum];
+    [data2PeakMaxHeightVariation{1,i}] = peakMaxInterval;
+    
+end
+
+disp("Done!");
+clear i tempData peakStart peakMax peakEnd peakMaxHeight peakMaxHeightNum peakMaxInterval]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 16
+% Mappingtable
+cellArray = ratioVariables;
+N = numel(cellArray);
+
+mappingTableRatio = cell(N, 2);
+
+for i = 1:N
+    mappingTableRatio{i, 1} = cellArray{i};
+    mappingTableRatio{i, 2} = i;
+end
+
+cellArray = timeVariables;
+N = numel(cellArray);
+
+mappingTableTime = cell(N, 2);
+
+for i = 1:N
+    mappingTableTime{i, 1} = cellArray{i};
+    mappingTableTime{i, 2} = i;
+end
+
+disp("Done!");
+clear i N cellArray]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 17
+% Isot alkukirjaimet numeerisiin arvoihin -> viedään data matlabista toiseen softaan
+heightMap = containers.Map('KeyType', 'char', 'ValueType', 'double');
+for i = 1:numel(ratioVariables)
+    heightMap(char('A'+i-1)) = i;
+end
+
+data1CandidateItemSetsThreshold = cell(1,numel(data1CandidateItemSets));
+data2CandidateItemSetsThreshold = cell(1,numel(data2CandidateItemSets));
+
+% Ensimmäinen hakemisto
+for j = 1:numel(data1CandidateItemSets)
+    data = cellstr(data1CandidateItemSets{1,j}(:, 1:3));
+    data2 = cellstr(data1CandidateItemSets{1,j}(:, 4:6));
+    thresholdLetter = data1AverageTopMinusBottom{1,j};
+
+    % Kynnysarvo
+    threshold = heightMap(char(thresholdLetter)) * 0.2;
+    
+	% Alustetaan
+    newData = {};
+    
+    % Jätetään pois arvot jotka ovat alle kynnysarvon (0.2) = noise
+    for i = 1:size(data, 1)
+        peakMax = heightMap(data{i, 2}(2));
+        if peakMax >= ceil(threshold)
+            newData = [newData; data(i, :), data2(i, :)];
+        end
+    end
+    [data1CandidateItemSetsThreshold{1,j}] = newData;
+end
+disp("Done!");
+
+% Toinen hakemisto
+for j = 1:numel(data2CandidateItemSets)
+    data = cellstr(data2CandidateItemSets{1,j}(:, 1:3));
+    data2 = cellstr(data2CandidateItemSets{1,j}(:, 4:6));
+    thresholdLetter = data2AverageTopMinusBottom{1,j};
+
+    % Kynnysarvo
+    threshold = heightMap(char(thresholdLetter)) * 0.2;
+    
+    % Alustetaan
+    newData = {};
+    
+    % Jätetään pois arvot jotka ovat alle kynnysarvon (0.2) = noise
+    for i = 1:size(data, 1)
+        peakMax = heightMap(data{i, 2}(2));
+        if peakMax > ceil(threshold)
+            newData = [newData; data(i, :), data2(i, :)];
+        end
+    end
+    [data2CandidateItemSetsThreshold{1,j}] = newData;
+end
+disp("Done!");
+
+clear i j newData peakMax threshold thresholdLetter heightMap data data2]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% 18
+% Löydetään piikit ja otetaan talteen
+data1CandidateItemSetsFinal = cell(1,numel(data1CandidateItemSetsThreshold));
+data2CandidateItemSetsFinal = cell(1,numel(data2CandidateItemSetsThreshold));
+
+maxMappedLetter = 'a';
+maxMappedLetterDataset = 0;
+
+for j = 1:numel(data1CandidateItemSetsThreshold)
+    cellArray = data1CandidateItemSetsThreshold{1,j}(:, 1:3);
+    
+	% Alustetaan
+    newCellArray = cell(size(cellArray, 1), 1);
+    
+    for i = 1:size(cellArray, 1) - 1
+        % Käydään läpi ja löydetään piikin alku
+        currPeakStart = cellArray{i, 1}(1);
+        nextPeakStart = cellArray{i+1, 1}(1);
+        
+        % Löydetään seuraava arvo ja verrataan
+        timeDiff = abs(double(currPeakStart) - double(nextPeakStart));
+        mappedTimeDiff = char(timeDiff + 97);
+        
+        % Katsotaan onko seuraava arvo suurempi
+        if mappedTimeDiff > maxMappedLetter
+            maxMappedLetter = mappedTimeDiff;
+            maxMappedLetterDataset = j;
+        end
+        
+        % Otetaan talteen nykyinen peakMax arvo
+        peakMax = cellArray{i, 2}(2);
+        
+        % Muodostetaan seuraava kandidaatti
+        newCellArray{i} = [mappedTimeDiff, peakMax];
+    end
+    
+    % Lasketaan piikin alusta loppuun
+    lastPeakStart = cellArray{end, 1}(1);
+    lastPeakEnd = cellArray{end, 3}(1);
+    lastTimeDiff = abs(double(lastPeakStart) - double(lastPeakEnd));
+    lastMappedTimeDiff = char(lastTimeDiff + 97);
+
+    % Jos löydetty arvo on suurempi kuin maxMappedLetter niin otetaan talteen
+    if lastMappedTimeDiff > maxMappedLetter
+        maxMappedLetter = lastMappedTimeDiff;
+        maxMappedLetterDataset = j;
+    end
+
+    lastPeakMax = cellArray{end, 2}(2);
+    newCellArray{end} = [lastMappedTimeDiff, lastPeakMax];
+%     disp(newCellArray);
+    data1CandidateItemSetsFinal{1,j} = newCellArray;
+    
+    disp(['The biggest mapped letter so far is: ', maxMappedLetter, ' FROM data1: ', num2str(maxMappedLetterDataset)]);
+    
+end
+
+
+maxMappedLetter = 'a';
+maxMappedLetterDataset = 0;
+
+for j = 1:numel(data2CandidateItemSetsThreshold)
+    cellArray = data2CandidateItemSetsThreshold{1,j}(:, 1:3);
+    
+
+    newCellArray = cell(size(cellArray, 1), 1);
+    
+    for i = 1:size(cellArray, 1) - 1
+
+        currPeakStart = cellArray{i, 1}(1);
+        nextPeakStart = cellArray{i+1, 1}(1);
+        
+
+        timeDiff = abs(double(currPeakStart) - double(nextPeakStart));
+        mappedTimeDiff = char(timeDiff + 97);
+        
+
+        if mappedTimeDiff > maxMappedLetter
+            maxMappedLetter = mappedTimeDiff;
+            maxMappedLetterDataset = j;
+        end
+        
+
+        peakMax = cellArray{i, 2}(2);
+        
+
+        newCellArray{i} = [mappedTimeDiff, peakMax];
+    end
+    
+
+    lastPeakStart = cellArray{end, 1}(1);
+    lastPeakEnd = cellArray{end, 3}(1);
+    lastTimeDiff = abs(double(lastPeakStart) - double(lastPeakEnd));
+    lastMappedTimeDiff = char(lastTimeDiff + 97);
+
+
+    if lastMappedTimeDiff > maxMappedLetter
+        maxMappedLetter = lastMappedTimeDiff;
+        maxMappedLetterDataset = j;
+    end
+
+    lastPeakMax = cellArray{end, 2}(2);
+    newCellArray{end} = [lastMappedTimeDiff, lastPeakMax];
+%     disp(newCellArray);
+    data2CandidateItemSetsFinal{1,j} = newCellArray;
+    
+
+    disp(['The biggest mapped letter so far is: ', maxMappedLetter, ' FROM data2: ', num2str(maxMappedLetterDataset)]);
+    
+end
+
+disp("Done!");
+clear i j cellArray currPeakStart lastMappedTimeDiff lastPeakMax lastPeakEnd lastPeakStart lastTimeDiff maxMappedLetter maxMappedLetterDataset newCellArray nextPeakStart peakMax timeDiff mappedTimeDiff]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[data1CandidateItemSetsFinalArray = {}; % Initialize new array
+
+% Reformataan
+for i=1:length(data1CandidateItemSetsFinal)
+    data = data1CandidateItemSetsFinal{i};
+    dataFormatted = cellfun(@(x) [x ' -1 '], data, 'UniformOutput', false);
+    str = [dataFormatted{:}];
+    str = [str '-2'];
+    data1CandidateItemSetsFinalArray{end+1} = str;
+end
+
+data1Global = {};
+
+for i=1:length(data1CandidateItemSetsFinal)
+    data = data1CandidateItemSetsFinal{i};
+    dataFormatted = cellfun(@(x) [x ' -1 '], data, 'UniformOutput', false);
+    str = [dataFormatted{:}];
+    str = [str '-2'];
+    data1Global{i,1} = str;
+end
+
+data2CandidateItemSetsFinalArray = {};
+
+for i=1:length(data2CandidateItemSetsFinal)
+    data = data2CandidateItemSetsFinal{i}; 
+    dataFormatted = cellfun(@(x) [x ' -1 '], data, 'UniformOutput', false);
+    str = [dataFormatted{:}];
+    str = [str '-2'];
+    data2CandidateItemSetsFinalArray{end+1} = str;
+end
+
+data2Global = {};
+
+for i=1:length(data2CandidateItemSetsFinal)
+    data = data2CandidateItemSetsFinal{i};
+    dataFormatted = cellfun(@(x) [x ' -1 '], data, 'UniformOutput', false);
+    str = [dataFormatted{:}];
+    str = [str '-2'];
+    data2Global{i,1} = str;
+end
+
+data1and2Global = [data1Global; data2Global];]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[data1Local = cell(size(data1CandidateItemSetsFinal)); % Initialize the new cell array
+
+% Reformataan parempaam kuntoon, jotta saadaan vietyä data matlabista toiseen softaan jatkokäsittelyä varten
+for i = 1:numel(data1CandidateItemSetsFinal)
+    cellArray = data1CandidateItemSetsFinal{i};
+    newCellArray = cell(size(cellArray, 1) - 1, 1);
+    
+    % Iterate over the current Nx1 cell array
+    for j = 1:size(cellArray, 1) - 1
+        % Combine the current row with the next one, add -1 between them and -1 -2 at the end
+        newCellArray{j} = [cellArray{j}, ' -1 ', cellArray{j + 1}, ' -1 -2'];
+    end
+    
+    data1Local{i} = newCellArray;
+end
+
+data2Local = cell(size(data2CandidateItemSetsFinal));
+
+% Iterate over the data1CandidateItemSetsFinal array
+for i = 1:numel(data2CandidateItemSetsFinal)
+    cellArray = data2CandidateItemSetsFinal{i};
+    newCellArray = cell(size(cellArray, 1) - 1, 1); % Initialize the new cell array for this element
+    
+    % Iterate over the current Nx1 cell array
+    for j = 1:size(cellArray, 1) - 1
+        % Combine the current row with the next one, add -1 between them and -1 -2 at the end
+        newCellArray{j} = [cellArray{j}, ' -1 ', cellArray{j + 1}, ' -1 -2'];
+    end
+    
+    data2Local{i} = newCellArray;
+end
+
+data1Local = data1Local';
+data2Local = data2Local';
+data1and2Local = [data1Local; data2Local];]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[% fid = fopen('data1and2Global.txt', 'w'); % Open file for writing
+
+% (testausta, ei toimi) 
+% if fid == -1, error('Cannot open file for writing.'); end
+% 
+% for i=1:length(data1and2Global)
+%     fprintf(fid, '%s\n', data1and2Global{i,1});
+% end
+% 
+% fclose(fid); % Close file]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[% Existing cell array
+inputCell = {'aE'; 'aE'; 'aE'; 'bE'; 'aE'; 'aD'; 'bE'; 'aE'; 'aD'; 'bD'; 'aD'; 'aD'; 'bD'; 'aD'; 'aD'; 'aD'; 'bD'; 'aD'; 'aD'; 'aC'; 'bC'; 'aC'; 'aD'; 'bD'; 'aC'; 'aC'; 'aC'; 'bC'; 'aC'; 'aC'; 'aC'; 'bC'; 'aC'; 'aC'; 'aC'; 'bC'; 'aB'; 'aC'; 'aC'; 'aC'; 'bC'; 'aC'};
+
+asd = cell(size(inputCell));
+
+for ii = 1:length(inputCell)
+    asd{ii} = strcat('{', inputCell{ii}, '}, ');
+end
+
+result = [asd{:}];
+
+finalResult = {result(1:end-2)};
+]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% Plot test 1
+% Luodaan kuvaaja ei-diskretisoidulle signaalille ensimmäisestä
+% hakemistosta
+
+i = 24;
+tempData = data1DetrendRemoveNegative{1,i};
+tempTime = tempData(:,1);
+tempRatio = tempData(:,2);
+plot(tempTime,tempRatio);
+tempData1Average = data1Averages{1,i};
+tempData1AverageMeanDiff = tempData1Average(1,2)-tempData1Average(1,1);
+yline(tempData1AverageMeanDiff, 'g--', 'A');
+
+% timeConstantValues = num2str(round(cat(2,cell2mat(disValuesTimeRaw(:,1))'),2));
+% xlabel(timeConstantValues,'FontWeight', 'bold');
+% ratioConstantValues = num2str(round(cat(2,cell2mat(disValuesRatioRaw(:,1))'),2));
+% ylabel(ratioConstantValues,'FontWeight', 'bold');
+
+disp('Done!');
+clear tempData tempTime tempRatio tempData1Average tempData1AverageMeanDiff ]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% Plot test 2
+% Luodaan kuvaaja ei-diskretisoidulle signaalille toisesta
+% hakemistosta
+
+i = 17;
+tempData = data2DetrendRemoveNegative{1,i};
+tempTime = tempData(:,1);
+tempRatio = tempData(:,2);
+plot(tempTime,tempRatio);
+tempData2Average = data2Averages{1,i};
+tempData2AverageMeanDiff = tempData2Average(1,2)-tempData2Average(1,1);
+yline(tempData2AverageMeanDiff, 'g--', 'A');
+
+% timeConstantValues = num2str(round(cat(2,cell2mat(disValuesTimeRaw(:,1))'),2));
+% xlabel(timeConstantValues,'FontWeight', 'bold');
+% ratioConstantValues = num2str(round(cat(2,cell2mat(disValuesRatioRaw(:,1))'),2));
+% ylabel(ratioConstantValues,'FontWeight', 'bold');
+
+disp('Done!');
+clear tempData tempTime tempRatio tempData2Average tempData2AverageMeanDiff]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% Plot test 3
+% Luodaan kuvaaja yksittäiselle diskretisoidulle signaalille ensimmäisestä hakemistosta
+% i = signaalinumero
+
+i = 7;
+tempData = data1Dis{1,i};
+tempTime = tempData(:,1);
+tempRatio = tempData(:,2);
+
+plot(tempTime, tempRatio);
+ax = gca;
+ax.XAxis.TickValues = (timeVariables);
+ax.XAxis.Categories = (timeVariables);
+ax.YAxis.TickValues = (ratioVariables);
+ax.YAxis.Categories = (ratioVariables);
+tempData1Average = data1Averages{1,i};
+tempData1AverageMeanDiff = tempData1Average(1,2)-tempData1Average(1,1);
+tempCatValue = returnCatValue(disValuesRatioRaw,tempData1AverageMeanDiff);
+yline(tempCatValue, 'g--', 'A');
+timeConstantValues = num2str(round(cat(2,cell2mat(disValuesTimeRaw(:,1))'),2));
+xlabel(timeConstantValues,'FontWeight', 'bold');
+ratioConstantValues = num2str(round(cat(2,cell2mat(disValuesRatioRaw(:,1))'),2));
+ylabel(ratioConstantValues,'FontWeight', 'bold');
+
+disp("Done!");
+clear tempData tempTime tempRatio i tempData1Average tempData1AverageMeanDiff tempCatValue]]></w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[clc
+% Plot test 4
+% Luodaan kuvaaja yksittäiselle diskretisoidulle signaalille toisesta hakemistosta
+% i = signaalinumero
+
+i = 26;
+tempData = data2Dis{1,i};
+tempTime = tempData(:,1);
+tempRatio = tempData(:,2);
+
+plot(tempTime, tempRatio);
+ax = gca;
+ax.XAxis.TickValues = (timeVariables);
+ax.XAxis.Categories = (timeVariables);
+ax.YAxis.TickValues = (ratioVariables);
+ax.YAxis.Categories = (ratioVariables);
+set(gca,'FontWeight', 'bold');
+set(gca, 'FontSize', 8);
+tempData2Average = data2Averages{1,i};
+tempData2AverageMeanDiff = tempData2Average(1,2)-tempData2Average(1,1);
+tempCatValue = returnCatValue(disValuesRatioRaw,tempData2AverageMeanDiff);
+yline(tempCatValue, 'g--', 'A');
+timeConstantValues = num2str(round(cat(2,cell2mat(disValuesTimeRaw(:,1))'),2));
+xlabel(timeConstantValues,'FontWeight', 'bold');
+ratioConstantValues = num2str(round(cat(2,cell2mat(disValuesRatioRaw(:,1))'),2));
+ylabel(ratioConstantValues,'FontWeight', 'bold');
+
+disp("Done!");
+clear tempData tempTime tempRatio i tempData2Average tempData2AverageMeanDiff tempCatValue]]></w:t></w:r></w:p></w:body></w:document>
